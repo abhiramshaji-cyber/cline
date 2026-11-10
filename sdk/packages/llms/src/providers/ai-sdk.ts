@@ -54,6 +54,7 @@ import {
 	isRetryableBeyondSdkRetries,
 } from "./error-classification";
 import { extractErrorMessage } from "./format";
+import { resolveModelStreamTimeout, withoutFetchIdleTimeout } from "./http";
 import { createRetryEmptyResponseMiddleware } from "./middleware/retry-empty-response";
 import {
 	isAnthropicCompatibleModel,
@@ -2261,7 +2262,11 @@ function createAiSdkProvider(
 					{
 						...config,
 						fetch: wrapFetchForAimlapiAttribution(
-							wrapFetchForStickySession(config.fetch, request, context),
+							wrapFetchForStickySession(
+								withoutFetchIdleTimeout(config.fetch),
+								request,
+								context,
+							),
 							request.providerId,
 						),
 					},
@@ -2414,6 +2419,7 @@ function createAiSdkProvider(
 					provider.buildStreamConfig
 						? provider.buildStreamConfig(request, context)
 						: buildAiSdkStreamConfig(request, context);
+				const streamTimeout = resolveModelStreamTimeout();
 				stream = await withAiSdkLangfuseTraceContext(
 					aiSdkTelemetry.isEnabled,
 					request,
@@ -2456,6 +2462,7 @@ function createAiSdkProvider(
 							...(provider.executesModelTools && activeModelTools.length
 								? { stopWhen: stepCountIs(8) }
 								: {}),
+							...(streamTimeout ? { timeout: streamTimeout } : {}),
 							...requestConfig,
 							streamRetries: MODEL_STREAM_MAX_RETRIES,
 							...(portableReasoning ? { reasoning: portableReasoning } : {}),
